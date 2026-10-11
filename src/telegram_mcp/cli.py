@@ -8,6 +8,7 @@ import sys
 from telegram_mcp.account import AccountError, authorize, connected_client
 from telegram_mcp.config import ConfigurationError, Settings
 from telegram_mcp.models import dialog_from_telegram
+from telegram_mcp.server import serve
 
 
 async def show_dialogs(settings: Settings) -> None:
@@ -34,12 +35,15 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("auth", help="Authorize Telegram interactively and save the session")
     commands.add_parser("dialogs", help="Show dialog IDs for configuring access (owner only)")
+    commands.add_parser("serve", help="Start the Streamable HTTP MCP service")
     args = parser.parse_args()
     try:
         if args.command == "auth":
             asyncio.run(authorize(Settings.from_env()))
         elif args.command == "dialogs":
             asyncio.run(show_dialogs(Settings.from_env()))
+        elif args.command == "serve":
+            serve(Settings.from_env())
     except (ConfigurationError, AccountError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from None

@@ -1,0 +1,25 @@
+services:
+  telegram-mcp:
+    build: .
+    image: telegram-mcp:local
+    env_file: .env
+    environment:
+      TELEGRAM_SESSION_DIR: /data
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: "8000"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - telegram-session:/data
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  telegram-session:

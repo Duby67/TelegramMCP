@@ -1,0 +1,4 @@
+# Replace this hostname and add it to MCP_ALLOWED_HOSTS in .env.
+mcp.example.com {
+    reverse_proxy 127.0.0.1:8000
+}

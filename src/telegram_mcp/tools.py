@@ -4,6 +4,7 @@ from collections.abc import Awaitable
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import AwareDatetime, Field
 
@@ -30,7 +31,9 @@ async def invoke(operation: Awaitable[Result]) -> CallToolResult:
     )
 
 
-def create_mcp(service: TelegramService) -> FastMCP:
+def create_mcp(
+    service: TelegramService, security: TransportSecuritySettings | None = None
+) -> FastMCP:
     mcp = FastMCP(
         "TelegramMCP",
         instructions=(
@@ -40,6 +43,8 @@ def create_mcp(service: TelegramService) -> FastMCP:
         ),
         stateless_http=True,
         json_response=True,
+        log_level="WARNING",
+        transport_security=security,
     )
     read_annotations = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
 
