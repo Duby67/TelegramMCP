@@ -1,17 +1,33 @@
 """The same MCP tool contract for local and remote HTTP clients."""
 
+from collections.abc import Awaitable
 from typing import Annotated
 
 from mcp.server.fastmcp import FastMCP
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from pydantic import AwareDatetime, Field
 
-from telegram_mcp.models import DialogPage, MessagePage, SendResult
+from telegram_mcp.errors import OperationError
+from telegram_mcp.models import ErrorResult, Result
 from telegram_mcp.service import TelegramService
 
 Limit = Annotated[int, Field(ge=1, le=100)]
 DialogID = Annotated[str, Field(pattern=r"^-?[1-9][0-9]*$", max_length=20)]
 MessageID = Annotated[int, Field(ge=1)]
+
+
+async def invoke(operation: Awaitable[Result]) -> CallToolResult:
+    try:
+        result = await operation
+        is_error = False
+    except OperationError as exc:
+        result = ErrorResult(error=exc.detail)
+        is_error = True
+    return CallToolResult(
+        content=[TextContent(type="text", text=result.model_dump_json())],
+        structuredContent=result.model_dump(mode="json"),
+        isError=is_error,
+    )
 
 
 def create_mcp(service: TelegramService) -> FastMCP:
@@ -28,9 +44,9 @@ def create_mcp(service: TelegramService) -> FastMCP:
     read_annotations = ToolAnnotations(readOnlyHint=True, destructiveHint=False, openWorldHint=True)
 
     @mcp.tool(annotations=read_annotations)
-    async def list_dialogs(limit: Limit = 50, cursor: DialogID | None = None) -> DialogPage:
+    async def list_dialogs(limit: Limit = 50, cursor: DialogID | None = None) -> CallToolResult:
         """List dialogs in ascending numeric ID order; pass next_cursor to get the next page."""
-        return await service.list_dialogs(limit, cursor)
+        return await invoke(service.list_dialogs(limit, cursor))
 
     @mcp.tool(annotations=read_annotations)
     async def get_messages(
@@ -39,9 +55,9 @@ def create_mcp(service: TelegramService) -> FastMCP:
         before_id: MessageID | None = None,
         since: AwareDatetime | None = None,
         until: AwareDatetime | None = None,
-    ) -> MessagePage:
+    ) -> CallToolResult:
         """Read newest first. since is inclusive, until and before_id exclusive. Times need TZ."""
-        return await service.get_messages(dialog_id, limit, before_id, since, until)
+        return await invoke(service.get_messages(dialog_id, limit, before_id, since, until))
 
     @mcp.tool(
         annotations=ToolAnnotations(
@@ -52,8 +68,8 @@ def create_mcp(service: TelegramService) -> FastMCP:
         dialog_id: DialogID,
         text: Annotated[str, Field(min_length=1, max_length=4096)],
         reply_to_message_id: MessageID | None = None,
-    ) -> SendResult:
+    ) -> CallToolResult:
         """Send plain text once, optionally replying in the same dialog. No automatic retries."""
-        return await service.send_message(dialog_id, text, reply_to_message_id)
+        return await invoke(service.send_message(dialog_id, text, reply_to_message_id))
 
     return mcp

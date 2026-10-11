@@ -19,6 +19,8 @@ class Dialog(Result):
     kind: DialogKind
     username: str | None = None
     telegram_send_capability: Literal["allowed", "restricted", "unknown"] = "unknown"
+    read_allowed: bool = False
+    write_allowed: bool = False
 
 
 class Message(Result):

@@ -2,10 +2,30 @@
 
 import argparse
 import asyncio
+import json
 import sys
 
-from telegram_mcp.account import AccountError, authorize
+from telegram_mcp.account import AccountError, authorize, connected_client
 from telegram_mcp.config import ConfigurationError, Settings
+from telegram_mcp.models import dialog_from_telegram
+
+
+async def show_dialogs(settings: Settings) -> None:
+    """Owner-only discovery; this command is not exposed as an MCP tool."""
+    async with connected_client(settings) as client:
+        try:
+            async for dialog in client.iter_dialogs():
+                model = dialog_from_telegram(dialog)
+                print(
+                    json.dumps(
+                        {"dialog_id": model.dialog_id, "title": model.title, "kind": model.kind},
+                        ensure_ascii=False,
+                    )
+                )
+        except Exception:
+            raise AccountError(
+                "Cannot list dialogs. Check Telegram connectivity and access."
+            ) from None
 
 
 def main() -> None:
@@ -13,10 +33,13 @@ def main() -> None:
     parser.add_argument("--version", action="version", version="telegram-mcp 0.1.0")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("auth", help="Authorize Telegram interactively and save the session")
+    commands.add_parser("dialogs", help="Show dialog IDs for configuring access (owner only)")
     args = parser.parse_args()
     try:
         if args.command == "auth":
             asyncio.run(authorize(Settings.from_env()))
+        elif args.command == "dialogs":
+            asyncio.run(show_dialogs(Settings.from_env()))
     except (ConfigurationError, AccountError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from None
