@@ -50,7 +50,12 @@ async def connected_client(
             raise AccountError(
                 "Telegram session is already in use. Stop the other service or auth command."
             ) from None
-        client = create_client(settings)
+        try:
+            client = create_client(settings)
+        except Exception:
+            raise AccountError(
+                "Cannot open Telegram session. Check storage permissions and session integrity."
+            ) from None
         try:
             settings.session_path.chmod(0o600)
             try:
@@ -64,15 +69,20 @@ async def connected_client(
                 raise AccountError("Telegram session expired. Run 'telegram-mcp auth' again.")
             yield client
         finally:
-            await client.disconnect()
+            try:
+                await client.disconnect()
+            except Exception:
+                raise AccountError(
+                    "Cannot close Telegram session cleanly. Stop the process before restarting."
+                ) from None
 
 
 async def authorize(settings: Settings) -> None:
     async with connected_client(settings, require_authorized=False) as client:
-        if await client.is_user_authorized():
-            print("Telegram session is already authorized.")
-            return
         try:
+            if await client.is_user_authorized():
+                print("Telegram session is already authorized.")
+                return
             phone = input("Telegram phone number (international format): ").strip()
             sent = await client.send_code_request(phone)
             code = getpass("Telegram login code (hidden): ").strip()

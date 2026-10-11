@@ -1,0 +1,31 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.22"
+      - run: uv sync --locked --python 3.12
+      - run: uv run pytest -q
+      - run: uv run ruff check --select E,W,F,B,I,UP,SIM,FURB,PLW1510,RUF100 --line-length 100 src tests
+      - run: uv run ruff format --line-length 100 --check src tests
+      - run: uv run mypy --check-untyped-defs --ignore-missing-imports --warn-redundant-casts --warn-unused-ignores src
+      - run: git diff --check
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cp .env.example .env
+      - run: docker compose config --quiet
+      - run: docker build -t telegram-mcp:test .
+      - run: docker run --rm telegram-mcp:test --help

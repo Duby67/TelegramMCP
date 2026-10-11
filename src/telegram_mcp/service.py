@@ -1,5 +1,6 @@
 """Telegram operations independent of MCP transport."""
 
+import asyncio
 from datetime import datetime
 
 from telethon import TelegramClient
@@ -14,6 +15,8 @@ from telegram_mcp.models import (
     message_from_telegram,
     validate_dialog_id,
 )
+
+REQUEST_TIMEOUT_SECONDS = 30
 
 
 def validate_limit(limit: int) -> None:
@@ -30,11 +33,12 @@ class TelegramService:
         validate_limit(limit)
         with telegram_errors():
             after_id = validate_dialog_id(cursor) if cursor is not None else None
-            dialogs = [
-                self.policy.annotate(dialog_from_telegram(d))
-                async for d in self.client.iter_dialogs()
-                if self.policy.visible(str(d.id))
-            ]
+            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+                dialogs = [
+                    self.policy.annotate(dialog_from_telegram(d))
+                    async for d in self.client.iter_dialogs()
+                    if self.policy.visible(str(d.id))
+                ]
         dialogs.sort(key=lambda d: int(d.dialog_id))
         if after_id is not None:
             dialogs = [d for d in dialogs if int(d.dialog_id) > after_id]
@@ -65,17 +69,18 @@ class TelegramService:
             raise invalid_request("since must be earlier than until.")
         messages = []
         with telegram_errors():
-            peer = await self.client.get_input_entity(numeric_id)
-            async for message in self.client.iter_messages(
-                peer, limit=None, offset_id=before_id or 0, offset_date=until
-            ):
-                if since is not None and message.date < since:
-                    break
-                if until is not None and message.date >= until:
-                    continue
-                messages.append(message_from_telegram(dialog_id, message))
-                if len(messages) > limit:
-                    break
+            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+                peer = await self.client.get_input_entity(numeric_id)
+                async for message in self.client.iter_messages(
+                    peer, limit=None, offset_id=before_id or 0, offset_date=until
+                ):
+                    if since is not None and message.date < since:
+                        break
+                    if until is not None and message.date >= until:
+                        continue
+                    messages.append(message_from_telegram(dialog_id, message))
+                    if len(messages) > limit:
+                        break
         page = messages[:limit]
         return MessagePage(
             messages=page,
@@ -96,19 +101,21 @@ class TelegramService:
         if reply_to_message_id is not None and reply_to_message_id <= 0:
             raise invalid_request("reply_to_message_id must be positive.", sending=True)
         with telegram_errors(sending=True):
-            peer = await self.client.get_input_entity(numeric_id)
-            if reply_to_message_id is not None:
-                replied = await self.client.get_messages(peer, ids=reply_to_message_id)
-                if replied is None:
-                    raise invalid_request(
-                        "The reply target does not exist in this dialog.", sending=True
-                    )
+            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+                peer = await self.client.get_input_entity(numeric_id)
+                if reply_to_message_id is not None:
+                    replied = await self.client.get_messages(peer, ids=reply_to_message_id)
+                    if replied is None:
+                        raise invalid_request(
+                            "The reply target does not exist in this dialog.", sending=True
+                        )
         with telegram_errors(sending=True, attempted=True):
-            message = await self.client.send_message(
-                peer,
-                text,
-                reply_to=reply_to_message_id,
-                parse_mode=None,
-                link_preview=False,
-            )
-            return SendResult(message=message_from_telegram(dialog_id, message))
+            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+                message = await self.client.send_message(
+                    peer,
+                    text,
+                    reply_to=reply_to_message_id,
+                    parse_mode=None,
+                    link_preview=False,
+                )
+                return SendResult(message=message_from_telegram(dialog_id, message))

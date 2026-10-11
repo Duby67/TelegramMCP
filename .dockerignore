@@ -6,3 +6,6 @@
 !src/**
 **/__pycache__/
 **/*.py[cod]
+**/*.session*
+**/.env
+**/.env.*
