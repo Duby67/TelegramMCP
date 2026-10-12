@@ -48,7 +48,7 @@ Install Docker with Compose. In WSL, enable Docker Desktop integration for your 
 
 4. Connect your agent and ask it to list your chats and channels. The list contains metadata only; reading history and sending messages initially remain blocked. Ask the agent to work with a selected dialog, then confirm the read or write permission in your MCP client's confirmation UI. No dialog IDs need to be copied into `.env`.
 
-Compose stores the session and `permissions.sqlite` in the `telegram-session` named volume and runs the container as UID 10001 with a read-only root filesystem. Normal restarts and image updates retain the session and confirmed permissions. `docker compose down -v` deletes both and requires a new login and new permissions.
+Compose stores the session and `permissions.sqlite` in the `telegram-session` named volume and runs the container as UID 10001 with a read-only root filesystem, a 512 MB memory limit, a 128-process limit, and logs rotated at three 10 MB files. Normal restarts and image updates retain the session and confirmed permissions. `docker compose down -v` deletes both and requires a new login and new permissions.
 
 Stop the running service before another `auth` or `dialogs` command:
 
