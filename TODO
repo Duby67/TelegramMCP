@@ -1,1 +1,2 @@
 Добавить работу не только с аккаунтом но и ботом
+После первой публикации сделать пакет ghcr.io/duby67/telegrammcp публичным (GitHub → Packages → telegrammcp → Package settings → Change visibility → Public)

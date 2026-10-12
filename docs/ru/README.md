@@ -21,11 +21,17 @@
 
 Установите Docker с Compose. В WSL включите интеграцию Docker Desktop для своего дистрибутива.
 
-1. Скопируйте `.env.example` в `.env` и задайте `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` из [настроек приложения Telegram](https://my.telegram.org/apps).
-2. Соберите образ и войдите в аккаунт интерактивно:
+1. В пустом каталоге скачайте файл Compose и пример конфигурации, затем задайте в `.env` значения `TELEGRAM_API_ID` и `TELEGRAM_API_HASH` из [настроек приложения Telegram](https://my.telegram.org/apps):
 
    ```bash
-   docker compose build
+   curl -fsSL -o compose.yaml https://raw.githubusercontent.com/Duby67/TelegramMCP/main/compose.yaml
+   curl -fsSL -o .env https://raw.githubusercontent.com/Duby67/TelegramMCP/main/.env.example
+   ```
+
+2. Загрузите опубликованный образ и войдите в аккаунт интерактивно:
+
+   ```bash
+   docker compose pull
    docker compose run --rm telegram-mcp auth
    ```
 
@@ -42,7 +48,7 @@
 
 4. Подключите агента и попросите показать ваши чаты и каналы. Список содержит только метаданные; чтение истории и отправка сообщений изначально запрещены. Попросите агента поработать с выбранным диалогом и подтвердите право чтения или отправки в интерфейсе вашего MCP-клиента. Копировать идентификаторы в `.env` не требуется.
 
-Compose хранит сессию и `permissions.sqlite` в именованном томе `telegram-session` и запускает контейнер с UID 10001 и корневой файловой системой только для чтения. Обычные перезапуски и пересборки сохраняют сессию и подтверждённые разрешения. `docker compose down -v` удаляет оба хранилища и требует нового входа и новых разрешений.
+Compose хранит сессию и `permissions.sqlite` в именованном томе `telegram-session` и запускает контейнер с UID 10001 и корневой файловой системой только для чтения. Обычные перезапуски и обновления образа сохраняют сессию и подтверждённые разрешения. `docker compose down -v` удаляет оба хранилища и требует нового входа и новых разрешений.
 
 Перед очередной командой `auth` или `dialogs` остановите работающий сервис:
 
@@ -139,6 +145,8 @@ uv run --env-file .env telegram-mcp auth
 uv run --env-file .env telegram-mcp dialogs
 uv run --env-file .env telegram-mcp serve
 ```
+
+Чтобы проверить локальный образ через Compose, соберите его под опубликованным именем: `docker build -t ghcr.io/duby67/telegrammcp:latest .`; `docker compose pull` заменит его опубликованным образом. Пуш тега `vX.Y.Z` публикует `X.Y.Z`, `X.Y` и `latest` для amd64 и arm64.
 
 Выполняйте операторские команды до запуска `serve`. Нативная блокировка сессии требует Unix-подобного окружения; на Windows поддерживается запуск через Docker. Приложение использует API MCP SDK 1.x, зависимости закреплены в `uv.lock`.
 

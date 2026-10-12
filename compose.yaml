@@ -1,7 +1,6 @@
 services:
   telegram-mcp:
-    build: .
-    image: telegram-mcp:local
+    image: ghcr.io/duby67/telegrammcp:latest
     env_file: .env
     environment:
       TELEGRAM_SESSION_DIR: /data

@@ -21,11 +21,17 @@ Server mode currently supports a static bearer token. It does not yet implement 
 
 Install Docker with Compose. In WSL, enable Docker Desktop integration for your distribution.
 
-1. Copy `.env.example` to `.env` and set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` from [Telegram's application settings](https://my.telegram.org/apps).
-2. Build the image and log in interactively:
+1. In an empty directory, download the Compose file and the configuration example, then set `TELEGRAM_API_ID` and `TELEGRAM_API_HASH` in `.env` from [Telegram's application settings](https://my.telegram.org/apps):
 
    ```bash
-   docker compose build
+   curl -fsSL -o compose.yaml https://raw.githubusercontent.com/Duby67/TelegramMCP/main/compose.yaml
+   curl -fsSL -o .env https://raw.githubusercontent.com/Duby67/TelegramMCP/main/.env.example
+   ```
+
+2. Pull the published image and log in interactively:
+
+   ```bash
+   docker compose pull
    docker compose run --rm telegram-mcp auth
    ```
 
@@ -42,7 +48,7 @@ Install Docker with Compose. In WSL, enable Docker Desktop integration for your 
 
 4. Connect your agent and ask it to list your chats and channels. The list contains metadata only; reading history and sending messages initially remain blocked. Ask the agent to work with a selected dialog, then confirm the read or write permission in your MCP client's confirmation UI. No dialog IDs need to be copied into `.env`.
 
-Compose stores the session and `permissions.sqlite` in the `telegram-session` named volume and runs the container as UID 10001 with a read-only root filesystem. Normal restarts and image rebuilds retain the session and confirmed permissions. `docker compose down -v` deletes both and requires a new login and new permissions.
+Compose stores the session and `permissions.sqlite` in the `telegram-session` named volume and runs the container as UID 10001 with a read-only root filesystem. Normal restarts and image updates retain the session and confirmed permissions. `docker compose down -v` deletes both and requires a new login and new permissions.
 
 Stop the running service before another `auth` or `dialogs` command:
 
@@ -139,6 +145,8 @@ uv run --env-file .env telegram-mcp auth
 uv run --env-file .env telegram-mcp dialogs
 uv run --env-file .env telegram-mcp serve
 ```
+
+To test a local image with Compose, build it under the published name with `docker build -t ghcr.io/duby67/telegrammcp:latest .`; `docker compose pull` replaces it with the published image. Pushing a `vX.Y.Z` tag publishes `X.Y.Z`, `X.Y`, and `latest` for amd64 and arm64.
 
 Run operator commands before starting `serve`. Native session locking requires a Unix-like environment; Docker is the supported route on Windows. The application uses the MCP SDK 1.x API with dependencies pinned in `uv.lock`.
 
