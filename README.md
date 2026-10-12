@@ -1,5 +1,7 @@
 # TelegramMCP
 
+**English** · [Русский](docs/ru/README.md)
+
 A self-hosted MCP service for reading and sending messages through your Telegram account. Private chats, groups, and channels share the same tools and dialog IDs. Telegram still enforces the account's permissions: subscribing to a channel does not grant permission to publish there.
 
 ## Deployment model
