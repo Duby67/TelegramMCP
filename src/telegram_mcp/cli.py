@@ -34,7 +34,7 @@ def main() -> None:
     parser.add_argument("--version", action="version", version="telegram-mcp 0.1.0")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("auth", help="Authorize Telegram interactively and save the session")
-    commands.add_parser("dialogs", help="Show dialog IDs for configuring access (owner only)")
+    commands.add_parser("dialogs", help="Show dialog metadata locally (optional owner diagnostic)")
     commands.add_parser("serve", help="Start the Streamable HTTP MCP service")
     args = parser.parse_args()
     try:

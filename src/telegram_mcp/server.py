@@ -67,7 +67,7 @@ def create_app(settings: Settings, *, service: TelegramService | None = None) ->
             if active_service is None:
                 client = await stack.enter_async_context(connected_client(settings))
                 active_service = TelegramService(
-                    client, AccessPolicy(settings.read_dialog_ids, settings.write_dialog_ids)
+                    client, AccessPolicy(settings.session_dir / "permissions.sqlite")
                 )
             security = TransportSecuritySettings(
                 enable_dns_rebinding_protection=True,

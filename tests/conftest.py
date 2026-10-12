@@ -65,11 +65,20 @@ def fake_client():
     return FakeClient()
 
 
+def make_policy(tmp_path: Path, read_ids=(), write_ids=()):
+    policy = AccessPolicy(tmp_path / "permissions.sqlite")
+    for dialog_id in read_ids:
+        policy.grant(dialog_id, "read")
+    for dialog_id in write_ids:
+        policy.grant(dialog_id, "write")
+    return policy
+
+
 @pytest.fixture
-def service(fake_client):
+def service(fake_client, tmp_path):
     return TelegramService(
         fake_client,
-        AccessPolicy(frozenset({"10", "-30", CHANNEL_ID}), frozenset({"10", CHANNEL_ID})),
+        make_policy(tmp_path, {"10", "-30", CHANNEL_ID}, {"10", CHANNEL_ID}),
     )
 
 

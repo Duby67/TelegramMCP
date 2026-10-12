@@ -8,6 +8,7 @@ from telethon import TelegramClient
 from telegram_mcp.access import AccessPolicy
 from telegram_mcp.errors import invalid_request, telegram_errors
 from telegram_mcp.models import (
+    Dialog,
     DialogPage,
     MessagePage,
     SendResult,
@@ -37,7 +38,6 @@ class TelegramService:
                 dialogs = [
                     self.policy.annotate(dialog_from_telegram(d))
                     async for d in self.client.iter_dialogs()
-                    if self.policy.visible(str(d.id))
                 ]
         dialogs.sort(key=lambda d: int(d.dialog_id))
         if after_id is not None:
@@ -47,6 +47,16 @@ class TelegramService:
             dialogs=page,
             next_cursor=page[-1].dialog_id if len(dialogs) > limit else None,
         )
+
+    async def find_dialog(self, dialog_id: str) -> Dialog:
+        """Resolve the real dialog title for a confirmation without reading history."""
+        with telegram_errors():
+            validate_dialog_id(dialog_id)
+            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+                async for dialog in self.client.iter_dialogs():
+                    if str(dialog.id) == dialog_id:
+                        return self.policy.annotate(dialog_from_telegram(dialog))
+        raise invalid_request("Dialog is not in this account. Use an ID from list_dialogs.")
 
     async def get_messages(
         self,

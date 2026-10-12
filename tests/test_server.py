@@ -1,3 +1,4 @@
+import json
 from contextlib import asynccontextmanager
 from dataclasses import replace
 
@@ -12,10 +13,43 @@ from telegram_mcp.server import create_app
 HEADERS = {"Accept": "application/json, text/event-stream"}
 
 
+def decode(response):
+    if response.headers.get("content-type", "").startswith("text/event-stream"):
+        return json.loads(
+            next(line[6:] for line in response.text.splitlines() if line.startswith("data: "))
+        )
+    return response.json()
+
+
+def initialize(client):
+    response = client.post(
+        "/mcp",
+        headers={**HEADERS, "Authorization": "Bearer " + "t" * 32},
+        json={
+            "jsonrpc": "2.0",
+            "id": 0,
+            "method": "initialize",
+            "params": {
+                "protocolVersion": "2025-11-25",
+                "capabilities": {},
+                "clientInfo": {"name": "test", "version": "1"},
+            },
+        },
+    )
+    assert response.status_code == 200
+    client.headers["Mcp-Session-Id"] = response.headers["Mcp-Session-Id"]
+    client.post(
+        "/mcp",
+        headers={**HEADERS, "Authorization": "Bearer " + "t" * 32},
+        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+    )
+
+
 @pytest.fixture
 def http_client(settings, service):
     configured = replace(settings, mode="server", token="t" * 32)
     with TestClient(create_app(configured, service=service), base_url="http://localhost") as client:
+        initialize(client)
         yield client
 
 
@@ -58,7 +92,7 @@ def test_tool_errors_have_mcp_error_flag_and_structured_details(http_client, fak
         "tools/call",
         {"name": "send_message", "arguments": {"dialog_id": "99", "text": "test"}},
     )
-    result = response.json()["result"]
+    result = decode(response)["result"]
     assert result["isError"]
     assert result["structuredContent"]["error"]["code"] == "ACCESS_DENIED"
     fake_client.send_message.assert_not_called()
@@ -70,8 +104,21 @@ def test_invalid_schema_input_never_reaches_telegram(http_client, fake_client):
         "tools/call",
         {"name": "get_messages", "arguments": {"dialog_id": "10", "limit": 101}},
     )
-    assert response.json()["result"]["isError"]
+    assert decode(response)["result"]["isError"]
     fake_client.get_input_entity.assert_not_called()
+
+
+def test_textual_approval_cannot_bypass_client_confirmation(http_client, service):
+    response = call(
+        http_client,
+        "tools/call",
+        {
+            "name": "request_dialog_access",
+            "arguments": {"dialog_id": "99", "access": "read", "approve": True},
+        },
+    )
+    assert decode(response)["result"]["isError"]
+    assert not service.policy.allowed("99", "read")
 
 
 async def test_mcp_sdk_full_read_and_send_flow(settings, service, fake_client):
@@ -89,7 +136,15 @@ async def test_mcp_sdk_full_read_and_send_flow(settings, service, fake_client):
     ):
         await session.initialize()
         tools = (await session.list_tools()).tools
-        assert {t.name for t in tools} == {"list_dialogs", "get_messages", "send_message"}
+        assert {t.name for t in tools} == {
+            "list_dialogs",
+            "get_messages",
+            "send_message",
+            "request_dialog_access",
+            "revoke_dialog_access",
+        }
+        access_tool = next(t for t in tools if t.name == "request_dialog_access")
+        assert set(access_tool.inputSchema["properties"]) == {"dialog_id", "access"}
         send_tool = next(t for t in tools if t.name == "send_message")
         assert send_tool.annotations.idempotentHint is False
         dialogs = await session.call_tool("list_dialogs", {"limit": 2})
@@ -119,9 +174,13 @@ def test_production_lifecycle_owns_account_and_uses_configured_policy(
             events.append("disconnected")
 
     monkeypatch.setattr("telegram_mcp.server.connected_client", connection)
-    configured = replace(settings, read_dialog_ids=frozenset({"10"}))
+    configured = settings
     with TestClient(create_app(configured), base_url="http://localhost") as client:
-        result = call(client, "tools/call", {"name": "list_dialogs"}).json()["result"]
-        assert [d["dialog_id"] for d in result["structuredContent"]["dialogs"]] == ["10"]
+        initialize(client)
+        result = decode(call(client, "tools/call", {"name": "list_dialogs"}))["result"]
+        assert len(result["structuredContent"]["dialogs"]) == 4
+        assert not any(
+            d["read_allowed"] or d["write_allowed"] for d in result["structuredContent"]["dialogs"]
+        )
         assert events == ["connected"]
     assert events == ["connected", "disconnected"]

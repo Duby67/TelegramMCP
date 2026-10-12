@@ -31,15 +31,7 @@ Install Docker with Compose. In WSL, enable Docker Desktop integration for your 
 
    Enter your phone number, login code, and 2FA password if requested. The code and password use hidden terminal prompts. Login is an operator command and is never exposed to the agent.
 
-3. Discover dialog IDs:
-
-   ```bash
-   docker compose run --rm telegram-mcp dialogs
-   ```
-
-   This owner-only command lists dialog IDs, names, and types. Add the IDs you choose to `TELEGRAM_READ_DIALOG_IDS` and/or `TELEGRAM_WRITE_DIALOG_IDS` in `.env`. Empty lists deny access; there is no wildcard. Reading and writing are independent permissions.
-
-4. Start the service:
+3. Start the service:
 
    ```bash
    docker compose up -d
@@ -48,7 +40,9 @@ Install Docker with Compose. In WSL, enable Docker Desktop integration for your 
 
    The health endpoint returns `{"status":"ok"}` after startup. It is a liveness endpoint, not a live check of Telegram connectivity.
 
-Compose stores the session in the `telegram-session` named volume and runs the container as UID 10001 with a read-only root filesystem. Normal restarts and image rebuilds retain the session. `docker compose down -v` deletes the volume and requires a new login.
+4. Connect your agent and ask it to list your chats and channels. The list contains metadata only; reading history and sending messages initially remain blocked. Ask the agent to work with a selected dialog, then confirm the read or write permission in your MCP client's confirmation UI. No dialog IDs need to be copied into `.env`.
+
+Compose stores the session and `permissions.sqlite` in the `telegram-session` named volume and runs the container as UID 10001 with a read-only root filesystem. Normal restarts and image rebuilds retain the session and confirmed permissions. `docker compose down -v` deletes both and requires a new login and new permissions.
 
 Stop the running service before another `auth` or `dialogs` command:
 
@@ -62,7 +56,9 @@ After changing `.env`, run `docker compose up -d` to recreate the service with t
 
 ## Connecting an agent
 
-Choose Streamable HTTP and use `http://127.0.0.1:8000/mcp`. The service does not provide STDIO transport.
+Choose Streamable HTTP and use `http://127.0.0.1:8000/mcp`. The service does not provide STDIO transport. It uses stateful MCP sessions and SSE responses to deliver user confirmation requests; a reverse proxy must support streaming and preserve `Mcp-Session-Id`.
+
+The MCP host must support form elicitation and present permission requests to the user. If confirmation is unsupported, declined, cancelled, or fails, no permission is granted. The server trusts the host's confirmation response: use a host that requires a human response and never automatically answers elicitation using the model. Text such as “the user approved” in an ordinary tool argument cannot grant access.
 
 For a compatible client using MCP server configuration, set its server URL and, if configured, its bearer token. For example, Codex's `config.toml` can contain:
 
@@ -93,11 +89,15 @@ All tools return JSON in both MCP text content and structured content. Dialog ID
 
 | Tool | Parameters | Result |
 | --- | --- | --- |
-| `list_dialogs` | `limit` (1–100, default 50), optional `cursor` | Allowed dialogs with type, local read/write permissions, Telegram send capability hint, and `next_cursor`. |
+| `list_dialogs` | `limit` (1–100, default 50), optional `cursor` | All dialog metadata with type, current read/write permissions, Telegram send capability hint, and `next_cursor`; no message contents. |
+| `request_dialog_access` | `dialog_id`, `access` (`read` or `write`) | Requests user confirmation, then returns `granted`, `already_granted`, `denied`, or `cancelled`. |
+| `revoke_dialog_access` | `dialog_id`, `access` (`read` or `write`) | Revokes that permission immediately; the other permission is unchanged. |
 | `get_messages` | `dialog_id`, `limit`, optional `before_id`, `since`, `until` | Messages newest first and `next_before_id`. |
 | `send_message` | `dialog_id`, `text`, optional `reply_to_message_id` | `status: "sent"` and the sent message. |
 
-Dialog pages sort by numeric ID; pass `next_cursor` to the next call. Listing enumerates the account's dialogs before filtering and pagination, so large accounts may take longer. Changes in membership between calls can change the available results.
+Dialog pages sort by numeric ID; pass `next_cursor` to the next call. Listing enumerates the account's dialogs before pagination, so large accounts may take longer. Changes in membership between calls can change the available results.
+
+Read and write grants are independent, apply to one dialog, and persist until revoked. A write grant permits subsequent sends rather than approving only one message. Permissions apply to all authenticated clients of this single-account deployment. Confirmation has a five-minute deadline. Granting or revoking access takes effect without restarting the container. `telegram-mcp dialogs` remains an optional owner diagnostic; it is not a setup requirement.
 
 For history, pass `next_before_id` as `before_id`. `before_id` is exclusive, `since` is inclusive, and `until` is exclusive. Time filters must include a timezone, such as `2026-01-01T09:00:00+03:00`. Each message includes its ID, timestamp, available sender ID, text, reply target, and whether it has media; media files are not downloaded.
 
@@ -119,15 +119,15 @@ The service disables Telethon's automatic request retries and automatic flood-wa
 | --- | --- |
 | `TELEGRAM_API_ID`, `TELEGRAM_API_HASH` | Required Telegram application credentials. |
 | `TELEGRAM_SESSION_DIR` | Session storage; `./data` natively, `/data` in Compose. |
-| `TELEGRAM_READ_DIALOG_IDS` | Comma-separated IDs allowed for history; empty denies all. |
-| `TELEGRAM_WRITE_DIALOG_IDS` | Comma-separated IDs allowed for sending; empty denies all. |
 | `MCP_MODE` | `local` (default) or `server`. |
 | `MCP_TOKEN` | Optional locally, required in server mode; at least 32 characters. |
 | `MCP_HOST`, `MCP_PORT` | Native bind address `127.0.0.1:8000`; Compose binds inside the container to `0.0.0.0:8000`. |
 | `MCP_ALLOWED_HOSTS` | Explicit Host allowlist; defaults to localhost and loopback with and without ports. Bare `*` is rejected. |
 | `MCP_ALLOWED_ORIGINS` | Exact comma-separated origins; empty denies requests with an Origin header. |
 
-Telegram credentials come from the environment. Account sessions stay in the user's volume; credential values and raw Telegram exceptions are not included in tool results. Applications with access to the environment or volume can still read those secrets. Keep `.env` and session files out of version control and backups intended for sharing. Requested messages are returned to the model for processing.
+The local `.env.example` contains only the required Telegram credentials. Other settings above are optional locally; server mode additionally requires its authentication and hostname settings. Nonempty legacy `TELEGRAM_READ_DIALOG_IDS` or `TELEGRAM_WRITE_DIALOG_IDS` settings produce an actionable configuration error instead of granting access; remove them and use user confirmation.
+
+Telegram credentials come from the environment. Account sessions and permission storage stay in the user's volume; credential values and raw Telegram exceptions are not included in tool results. Applications with access to the environment or volume can still read those secrets or modify permissions. Keep `.env`, session files, and `permissions.sqlite` out of version control and backups intended for sharing. Requested messages are returned to the model for processing.
 
 ## Development and verification
 

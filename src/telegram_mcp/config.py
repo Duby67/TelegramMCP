@@ -5,8 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from telegram_mcp.models import validate_dialog_id
-
 
 class ConfigurationError(ValueError):
     """An invalid deployment setting, safe to display to the operator."""
@@ -17,8 +15,6 @@ class Settings:
     api_id: int
     api_hash: str = field(repr=False)
     session_dir: Path
-    read_dialog_ids: frozenset[str] = field(default_factory=frozenset)
-    write_dialog_ids: frozenset[str] = field(default_factory=frozenset)
     mode: Literal["local", "server"] = "local"
     token: str | None = field(default=None, repr=False)
     host: str = "127.0.0.1"
@@ -39,6 +35,11 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        for name in ("TELEGRAM_READ_DIALOG_IDS", "TELEGRAM_WRITE_DIALOG_IDS"):
+            if os.environ.get(name, "").strip():
+                raise ConfigurationError(
+                    f"Remove {name}; permissions now require request_dialog_access confirmation."
+                )
         try:
             api_id = int(os.environ.get("TELEGRAM_API_ID", ""))
         except ValueError:
@@ -62,8 +63,6 @@ class Settings:
             api_id=api_id,
             api_hash=api_hash,
             session_dir=session_dir,
-            read_dialog_ids=dialog_ids_from_env("TELEGRAM_READ_DIALOG_IDS"),
-            write_dialog_ids=dialog_ids_from_env("TELEGRAM_WRITE_DIALOG_IDS"),
             mode="server" if mode == "server" else "local",
             token=os.environ.get("MCP_TOKEN") or None,
             host=os.environ.get("MCP_HOST", "127.0.0.1"),
@@ -89,18 +88,3 @@ class Settings:
             raise ConfigurationError("MCP_TOKEN must contain at least 32 characters.")
         if not self.allowed_hosts or "*" in self.allowed_hosts:
             raise ConfigurationError("MCP_ALLOWED_HOSTS must name explicit hosts, not '*'.")
-
-
-def dialog_ids_from_env(name: str) -> frozenset[str]:
-    raw = os.environ.get(name, "").strip()
-    if not raw:
-        return frozenset()
-    ids = frozenset(part.strip() for part in raw.split(","))
-    try:
-        for dialog_id in ids:
-            validate_dialog_id(dialog_id)
-    except ValueError:
-        raise ConfigurationError(
-            f"Set {name} to comma-separated dialog IDs from 'telegram-mcp dialogs'."
-        ) from None
-    return ids

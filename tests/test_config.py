@@ -27,19 +27,18 @@ def configured_env(monkeypatch):
 
 def test_environment_defaults_deny_access(configured_env):
     settings = Settings.from_env()
-    assert not settings.read_dialog_ids
-    assert not settings.write_dialog_ids
+    assert not hasattr(settings, "read_dialog_ids")
+    assert not hasattr(settings, "write_dialog_ids")
     assert settings.mode == "local"
     assert settings.host == "127.0.0.1"
     settings.validate_http()
 
 
-def test_environment_separates_read_and_write(configured_env):
+def test_legacy_permissions_are_rejected_instead_of_imported(configured_env):
     configured_env.setenv("TELEGRAM_READ_DIALOG_IDS", "10, -30")
     configured_env.setenv("TELEGRAM_WRITE_DIALOG_IDS", "10")
-    settings = Settings.from_env()
-    assert settings.read_dialog_ids == {"10", "-30"}
-    assert settings.write_dialog_ids == {"10"}
+    with pytest.raises(ConfigurationError, match="Remove TELEGRAM_READ_DIALOG_IDS"):
+        Settings.from_env()
 
 
 @pytest.mark.parametrize(

@@ -1,11 +1,14 @@
 *
+
 !Dockerfile
 !pyproject.toml
 !uv.lock
 !src/
 !src/**
+
 **/__pycache__/
 **/*.py[cod]
 **/*.session*
+**/permissions.sqlite*
 **/.env
 **/.env.*

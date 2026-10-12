@@ -4,30 +4,34 @@ from datetime import timedelta
 import pytest
 from telethon import errors, types
 
-from telegram_mcp.access import AccessPolicy
 from telegram_mcp.errors import OperationError
 from telegram_mcp.models import dialog_from_telegram, message_from_telegram
 from telegram_mcp.service import TelegramService
 
-from .conftest import CHANNEL_ID, NOW, make_dialog, make_message
+from .conftest import CHANNEL_ID, NOW, make_dialog, make_message, make_policy
 
 
-async def test_dialog_pages_filter_before_pagination_and_keep_types(service):
+async def test_dialog_pages_include_ungranted_metadata_and_keep_types(service):
     first = await service.list_dialogs(limit=2)
     second = await service.list_dialogs(limit=2, cursor=first.next_cursor)
     assert [d.dialog_id for d in first.dialogs] == [CHANNEL_ID, "-30"]
     assert [d.kind for d in first.dialogs] == ["channel", "group"]
     assert first.next_cursor == "-30"
-    assert [d.dialog_id for d in second.dialogs] == ["10"]
+    assert [d.dialog_id for d in second.dialogs] == ["10", "99"]
     assert second.next_cursor is None
     assert first.dialogs[0].write_allowed
     assert not first.dialogs[1].write_allowed
-    assert all(d.dialog_id != "99" for d in first.dialogs + second.dialogs)
+    assert not second.dialogs[1].read_allowed
+    assert not second.dialogs[1].write_allowed
 
 
-async def test_default_policy_denies_all(fake_client):
-    service = TelegramService(fake_client, AccessPolicy(frozenset(), frozenset()))
-    assert (await service.list_dialogs()).dialogs == []
+async def test_default_policy_exposes_metadata_but_denies_history_and_sending(
+    fake_client, tmp_path
+):
+    service = TelegramService(fake_client, make_policy(tmp_path))
+    dialogs = (await service.list_dialogs()).dialogs
+    assert len(dialogs) == 4
+    assert not any(d.read_allowed or d.write_allowed for d in dialogs)
     with pytest.raises(OperationError, match="read access"):
         await service.get_messages("10")
     with pytest.raises(OperationError, match="write access") as exc:
@@ -37,9 +41,9 @@ async def test_default_policy_denies_all(fake_client):
     fake_client.send_message.assert_not_called()
 
 
-async def test_write_permission_does_not_grant_read(fake_client):
-    service = TelegramService(fake_client, AccessPolicy(frozenset(), frozenset({"10"})))
-    assert not (await service.list_dialogs()).dialogs[0].read_allowed
+async def test_write_permission_does_not_grant_read(fake_client, tmp_path):
+    service = TelegramService(fake_client, make_policy(tmp_path, write_ids={"10"}))
+    assert not any(d.read_allowed for d in (await service.list_dialogs()).dialogs)
     with pytest.raises(OperationError):
         await service.get_messages("10")
     await service.send_message("10", "test")
@@ -84,8 +88,8 @@ async def test_bad_history_request_never_reaches_telegram(service, fake_client, 
 
 
 @pytest.mark.parametrize("dialog_id", ["10", "-30", CHANNEL_ID])
-async def test_send_uses_same_plain_text_contract(fake_client, dialog_id):
-    service = TelegramService(fake_client, AccessPolicy(frozenset(), frozenset({dialog_id})))
+async def test_send_uses_same_plain_text_contract(fake_client, dialog_id, tmp_path):
+    service = TelegramService(fake_client, make_policy(tmp_path, write_ids={dialog_id}))
     result = await service.send_message(dialog_id, "**literal text**", reply_to_message_id=1)
     fake_client.get_messages.assert_awaited_once_with(int(dialog_id), ids=1)
     fake_client.send_message.assert_awaited_once_with(

@@ -48,6 +48,12 @@ class SendResult(Result):
     status: Literal["sent"] = "sent"
 
 
+class AccessResult(Result):
+    dialog_id: str
+    access: Literal["read", "write"]
+    status: Literal["granted", "already_granted", "denied", "cancelled", "revoked"]
+
+
 class ErrorDetail(Result):
     code: str
     message: str
