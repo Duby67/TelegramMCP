@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import sys
+import threading
 
 from telegram_mcp.account import AccountError, authorize, connected_client
 from telegram_mcp.config import ConfigurationError, Settings
@@ -43,7 +44,14 @@ def main() -> None:
         elif args.command == "dialogs":
             asyncio.run(show_dialogs(Settings.from_env()))
         elif args.command == "serve":
-            serve(Settings.from_env())
+            try:
+                settings = Settings.from_env()
+                settings.validate_http()
+            except ConfigurationError as exc:
+                # Stay up so a container restart policy does not loop on a static error.
+                print(f"{exc} Fix the environment and recreate the service.", file=sys.stderr)
+                threading.Event().wait()
+            serve(settings)
     except (ConfigurationError, AccountError) as exc:
         print(str(exc), file=sys.stderr)
         raise SystemExit(1) from None
@@ -53,5 +61,5 @@ def main() -> None:
         )
         raise SystemExit(1) from None
     except (KeyboardInterrupt, EOFError):
-        print("Authorization cancelled.", file=sys.stderr)
+        print("Cancelled.", file=sys.stderr)
         raise SystemExit(1) from None

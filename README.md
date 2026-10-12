@@ -46,6 +46,8 @@ Install Docker with Compose. In WSL, enable Docker Desktop integration for your 
 
    The health endpoint returns `{"status":"ok"}` after startup. It is a liveness endpoint, not a live check of Telegram connectivity.
 
+   Without valid configuration, an authorized session, or a Telegram connection, the service does not restart in a loop: it stays unhealthy and reports the reason once in `docker compose logs`. It rechecks the session every 10 seconds and starts after a successful `auth`; configuration changes require `docker compose up -d`.
+
 4. Connect your agent and ask it to list your chats and channels. The list contains metadata only; reading history and sending messages initially remain blocked. Ask the agent to work with a selected dialog, then confirm the read or write permission in your MCP client's confirmation UI. No dialog IDs need to be copied into `.env`.
 
 Compose stores the session and `permissions.sqlite` in the `telegram-session` named volume and runs the container as UID 10001 with a read-only root filesystem, a 512 MB memory limit, a 128-process limit, and logs rotated at three 10 MB files. Normal restarts and image updates retain the session and confirmed permissions. `docker compose down -v` deletes both and requires a new login and new permissions.
@@ -127,7 +129,7 @@ The service disables Telethon's automatic request retries and automatic flood-wa
 | `TELEGRAM_SESSION_DIR` | Session storage; `./data` natively, `/data` in Compose. |
 | `MCP_MODE` | `local` (default) or `server`. |
 | `MCP_TOKEN` | Optional locally, required in server mode; at least 32 characters. |
-| `MCP_HOST`, `MCP_PORT` | Native bind address `127.0.0.1:8000`; Compose binds inside the container to `0.0.0.0:8000`. |
+| `MCP_HOST`, `MCP_PORT` | Native bind address `127.0.0.1:8000`. In Compose, `MCP_PORT` sets the loopback host port (default `8000`) and the container always listens on `0.0.0.0:8000`. |
 | `MCP_ALLOWED_HOSTS` | Explicit Host allowlist; defaults to localhost and loopback with and without ports. Bare `*` is rejected. |
 | `MCP_ALLOWED_ORIGINS` | Exact comma-separated origins; empty denies requests with an Origin header. |
 

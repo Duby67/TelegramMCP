@@ -6,7 +6,13 @@ import pytest
 from telethon.errors import SessionPasswordNeededError
 
 from telegram_mcp import account
-from telegram_mcp.account import AccountError, authorize, connected_client, create_client
+from telegram_mcp.account import (
+    AccountError,
+    authorize,
+    connected_client,
+    create_client,
+    wait_for_session,
+)
 
 
 @pytest.fixture
@@ -57,6 +63,26 @@ async def test_expired_session_disconnects(settings, account_client):
     account_client.disconnect.assert_awaited_once()
 
 
+async def test_wait_for_session_reports_each_reason_once_and_releases_lock(
+    settings, account_client, monkeypatch, capsys
+):
+    sleeps = []
+
+    async def fake_sleep(interval):
+        sleeps.append(interval)
+        if len(sleeps) == 2:
+            settings.session_dir.mkdir()
+            settings.session_path.touch()
+
+    monkeypatch.setattr(account.asyncio, "sleep", fake_sleep)
+    await wait_for_session(settings, interval=7)
+    assert sleeps == [7, 7]
+    assert capsys.readouterr().err.count("No Telegram session") == 1
+    account_client.disconnect.assert_awaited_once()
+    async with connected_client(settings):
+        pass
+
+
 async def test_login_handles_2fa_without_printing_credentials(
     settings, account_client, monkeypatch, capsys
 ):
@@ -93,7 +119,9 @@ async def test_telethon_automatic_request_retries_are_disabled(settings):
         assert client._request_retries == 0
         assert client.flood_sleep_threshold == 0
     finally:
-        await client.disconnect()
+        disconnected = client.disconnect()  # A Future while the event loop is running.
+        assert disconnected is not None
+        await disconnected
 
 
 async def test_session_open_failure_is_safe_and_releases_lock(settings, monkeypatch):

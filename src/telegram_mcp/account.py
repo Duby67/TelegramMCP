@@ -1,8 +1,10 @@
 """Interactive login and exclusive ownership of a persistent Telegram session."""
 
+import asyncio
 import fcntl
 import logging
 import os
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from getpass import getpass
@@ -75,6 +77,20 @@ async def connected_client(
                 raise AccountError(
                     "Cannot close Telegram session cleanly. Stop the process before restarting."
                 ) from None
+
+
+async def wait_for_session(settings: Settings, *, interval: float = 10.0) -> None:
+    """Wait without holding the session until it is authorized, free, and reachable."""
+    reported = None
+    while True:
+        try:
+            async with connected_client(settings):
+                return
+        except AccountError as exc:
+            if str(exc) != reported:
+                reported = str(exc)
+                print(f"{reported} Waiting.", file=sys.stderr, flush=True)
+        await asyncio.sleep(interval)
 
 
 async def authorize(settings: Settings) -> None:

@@ -1,5 +1,6 @@
 """Authenticated Streamable HTTP service with explicit startup and shutdown."""
 
+import asyncio
 import hmac
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
@@ -14,7 +15,7 @@ from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from telegram_mcp.access import AccessPolicy
-from telegram_mcp.account import connected_client
+from telegram_mcp.account import connected_client, wait_for_session
 from telegram_mcp.config import Settings
 from telegram_mcp.service import TelegramService
 from telegram_mcp.tools import create_mcp
@@ -87,8 +88,10 @@ def create_app(settings: Settings, *, service: TelegramService | None = None) ->
 
 
 def serve(settings: Settings) -> None:
+    app = create_app(settings)
+    asyncio.run(wait_for_session(settings))
     uvicorn.run(
-        create_app(settings),
+        app,
         host=settings.host,
         port=settings.port,
         access_log=False,
