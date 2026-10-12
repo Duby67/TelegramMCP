@@ -125,7 +125,7 @@ The service disables Telethon's automatic request retries and automatic flood-wa
 | `MCP_ALLOWED_HOSTS` | Explicit Host allowlist; defaults to localhost and loopback with and without ports. Bare `*` is rejected. |
 | `MCP_ALLOWED_ORIGINS` | Exact comma-separated origins; empty denies requests with an Origin header. |
 
-The local `.env.example` contains only the required Telegram credentials. Other settings above are optional locally; server mode additionally requires its authentication and hostname settings. Nonempty legacy `TELEGRAM_READ_DIALOG_IDS` or `TELEGRAM_WRITE_DIALOG_IDS` settings produce an actionable configuration error instead of granting access; remove them and use user confirmation.
+`.env.example` lists the same settings for local and server use: Telegram credentials, `MCP_MODE`, `MCP_TOKEN`, and `MCP_ALLOWED_HOSTS`. Other settings above are optional. Nonempty legacy `TELEGRAM_READ_DIALOG_IDS` or `TELEGRAM_WRITE_DIALOG_IDS` settings produce an actionable configuration error instead of granting access; remove them and use user confirmation.
 
 Telegram credentials come from the environment. Account sessions and permission storage stay in the user's volume; credential values and raw Telegram exceptions are not included in tool results. Applications with access to the environment or volume can still read those secrets or modify permissions. Keep `.env`, session files, and `permissions.sqlite` out of version control and backups intended for sharing. Requested messages are returned to the model for processing.
 
