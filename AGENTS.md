@@ -13,8 +13,6 @@ TelegramMCP is a self-hosted MCP service for access to a user's Telegram account
 
 - Make the smallest correct change. Prefer, in order: no change, existing code, the standard library, an installed dependency, new code. Stay in scope.
 - Read narrowly: focused search, bounded reads, `git diff --stat` before diffs, quiet test output.
-- Never read or search `uv.lock`, `dist/`, `data/`, `.venv/`, `.mypy_cache/`, `.pytest_cache/`, or `.ruff_cache/`.
-- Fastest checks: `uv run pytest -q tests/<file>.py::<test>`, `uv run ruff check --select E,W,F,B,I,UP,SIM,FURB,PLW1510,RUF100 --line-length 100 <files>`, `uv run mypy --check-untyped-defs --ignore-missing-imports --warn-redundant-casts --warn-unused-ignores src`; the full set is in `.github/workflows/check.yml`.
 - Do not create plan, summary, or notes files unless asked.
 - Keep the repository root minimal: put a new file in an existing directory or its tool's own (`docs/`, `.claude/`, `.github/`); add a root file only where a tool requires it.
 
